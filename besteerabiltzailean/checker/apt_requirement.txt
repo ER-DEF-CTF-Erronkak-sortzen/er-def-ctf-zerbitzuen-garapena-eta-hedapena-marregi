@@ -1,0 +1,2 @@
+python3-paramiko
+python3-requests

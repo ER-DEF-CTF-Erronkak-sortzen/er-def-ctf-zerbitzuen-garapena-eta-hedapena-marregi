@@ -164,7 +164,7 @@ class MyChecker(checkerlib.BaseChecker):
     @ssh_connect()
     def _check_apache_version(self):
         ssh_session = self.client
-        command = f"docker exec pasapasa_web_1 sh -c 'httpd -v | grep \"Apache/2.4.50\'"
+        command = f"docker exec pasapasa_web_1 sh -c 'httpd -v | grep \"Apache/2.4.50\"'"
         stdin, stdout, stderr = ssh_session.exec_command(command)
 
         if stdout:

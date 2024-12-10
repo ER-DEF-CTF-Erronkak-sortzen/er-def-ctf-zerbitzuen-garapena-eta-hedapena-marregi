@@ -11,16 +11,17 @@ import requests
 
 
 FILE_CHECKSUM_PATHS = {
-    "/app/app/v1/router/health_router.py" : "6ea812b475199025ba978d68d4881440",
-    "/app/app/v1/router/user_router.py" : "00ceb52767a796b6129a9c34ea2016ff",
-    # "/app/app/v1/service/user_service.py" : "2a41fe7736f800631a297e8d5a684c94", # Must be change to defense
-    "/app/app/v1/service/auth_service.py" : "7a75d92cf1e7ad1bf7d5dfab32405079",
-    "/app/app/v1/utils/db.py" : "b87765c77377a471aa81f4d7a76ff383",
-    "/app/app/v1/utils/settings.py" : "36e06f1dc771c70482a0b4a0f79e27d4",
-    "/app/app/v1/scripts/create_tables.py" : "9bc7c3d28d86ca5599052d7a9480a14d",
-    "/app/app/v1/schema/token_schema.py" : "de9354500504ca87959bb73d20a64a0b",
-    "/app/app/v1/schema/user_schema.py" : "864d8e38e7f59bdb709aba3e96e2d119",
-    "/app/app/v1/model/user_model.py" : "61aae88dfe8f89d1994adf699f49d7b4",
+"./main.py" : "82340b16c7062bd8e496921ef8c687ec",
+"./app/model/user_model.py" : "46c962705e39dd1c6a4916884e04cc79",
+#"./app/schema/user_schema.py" : "af696b3d3ad148d633aa575514efdeac",
+"./app/schema/token_schema.py" : "de9354500504ca87959bb73d20a64a0b",
+"./app/scripts/create_tables.py" : "a2ccc09ad5859cb8a20dfffb1efe47c2",
+"./app/router/health_router.py" : "38bb8f10bc34eb68aaf67c4fc9c88fa6",
+"./app/router/user_router.py" : "8c5a120bd4226b46b8c867df4f92d0e0",
+"./app/utils/db.py" : "d39f29e7c67f70ce910fbcbf0bd0dffc",
+"./app/utils/settings.py" : "a4161d7b7c08a2fdb70113c03c911cdd",
+"./app/service/auth_service.py" : "9e6fa74d58610d57281c382c525a14f1",
+"./app/service/user_service.py" : "e8fdc8847028446e0519c8d4b1cb3883",
 }
 PORT_API = 8008
 def ssh_connect():
@@ -52,6 +53,7 @@ class MyChecker(checkerlib.BaseChecker):
     @ssh_connect()
     def place_flag(self, tick):
         flag = checkerlib.get_flag(tick)
+        logging.info("yyyyyyyyyyy: " + flag)
         creds = self._add_new_flag(self.client, flag)
         if not creds:
             return checkerlib.CheckResult.FAULTY
@@ -63,11 +65,14 @@ class MyChecker(checkerlib.BaseChecker):
     def check_service(self):
         # check if ports are open
         if not self._check_port_api(self.ip, PORT_API):
+            logging.info(f"xxx1")
             return checkerlib.CheckResult.DOWN
-        if not self._get_api_normal_response():
+        if not self._get_api_normal_response(self.ip, PORT_API):
+            logging.info(f"xxx2")
             return checkerlib.CheckResult.FAULTY 
         # check if files from besterabiltzailean has been changed by comparing its hash with the hash of the original file
         if not self._check_api_integrity(FILE_CHECKSUM_PATHS):
+            logging.info(f"xxx3")
             return checkerlib.CheckResult.FAULTY
                   
         return checkerlib.CheckResult.OK
@@ -93,12 +98,14 @@ class MyChecker(checkerlib.BaseChecker):
   
     def _add_new_flag(self, ssh_session, flag):
         # Execute the file creation command in the container
-        db_command = f"psql 'postgres://ctf:ctf@localhost/ctf' -c \"UPDATE public.user SET flag='{flag}' WHERE username='admin'\""
-        command = f"docker exec besteerabiltzailean-db-1 sh -c '{db_command}'"
+        db_command = f"psql -qtXA postgres://ctf:ctf@localhost/ctf -c \\\"UPDATE public.user SET flag=concat(flag,'{flag}') WHERE username='admin';\\\""
+        logging.info(db_command)
+        command = f"docker exec besteerabiltzailean_db_1 sh -c \"{db_command}\""
         stdin, stdout, stderr = ssh_session.exec_command(command)
 
         # Check if the command executed successfully
         if stderr.channel.recv_exit_status() != 0:
+            logging.info(stderr)
             return False
         
         # Return the result
@@ -107,13 +114,15 @@ class MyChecker(checkerlib.BaseChecker):
     @ssh_connect()
     def _check_flag_present(self, flag):
         ssh_session = self.client
-        db_command = f"psql -qtAX 'postgres://ctf:ctf@localhost/ctf' -c \"SELECT flag FROM public.user WHERE username='admin'\""
-        command = f"docker exec besteerabiltzailean-db-1 sh -c '{db_command}'"
+        db_command = f"psql -qtAX postgres://ctf:ctf@localhost/ctf -c \\\"SELECT flag FROM public.user WHERE username='admin'\\\""
+        command = f"docker exec besteerabiltzailean_db_1 sh -c \"{db_command}\""
         stdin, stdout, stderr = ssh_session.exec_command(command)
         if stderr.channel.recv_exit_status() != 0:
             return False
         output = stdout.read().decode().strip()
-        return flag == output
+        logging.info(flag)
+        logging.info(output)
+        return flag in output
 
     def _check_port_api(self, ip, port):
         try:
@@ -131,21 +140,22 @@ class MyChecker(checkerlib.BaseChecker):
     def _get_api_normal_response(self, ip, port):
         url = f"http://{ip}:{port}/api/v1"
         res = requests.post(f'{url}/login', data={'username': 'user', 'password': 'pasahitz_sekretua'})
-        headers={'Authorization': f'Bearer {res.json['access_token']}'}
+        if res.status_code != 200:
+            return False
+        headers={'Authorization': f'Bearer {res.json()["access_token"]}'}
         user = requests.get(f'{url}/user/user', headers=headers)
         user_json = user.json()
         return user_json['username'] == 'user'
     
-    @ssh_connect()
+    @ssh_connect()  
     def _check_api_integrity(self, paths):
         ssh_session = self.client
         for path, file_sum in paths.items():
-            command = f"docker exec besteerabiltzailean-web-1 sh -c 'cat {path}'"
+            command = f"docker exec besteerabiltzailean_web_1 sh -c 'cat {path}'"
             stdin, stdout, stderr = ssh_session.exec_command(command)
             if stderr.channel.recv_exit_status() != 0:
                 return False
-            
-            output = stdout.read().decode().strip()
+            output = stdout.read().decode()
             if hashlib.md5(output.encode()).hexdigest() != file_sum:
                 return False
         return True

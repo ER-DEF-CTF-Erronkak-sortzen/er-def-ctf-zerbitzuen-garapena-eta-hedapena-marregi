@@ -7,9 +7,9 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from api.model.user_model import User as UserModel
-from api.schema.token_schema import TokenData
-from api.utils.settings import Settings
+from app.model.user_model import User as UserModel
+from app.schema.token_schema import TokenData
+from app.utils.settings import Settings
 import logging
 
 logging.getLogger('passlib').setLevel(logging.ERROR)

@@ -2,7 +2,7 @@ import peewee
 from contextvars import ContextVar
 from fastapi import Depends
 
-from api.utils.settings import Settings
+from app.utils.settings import Settings
 
 settings = Settings()
 

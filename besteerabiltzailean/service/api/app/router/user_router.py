@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import status
 
-from api.schema import user_schema
-from api.service import user_service
-from api.utils.db import get_db
-from api.schema.user_schema import User
-from api.service.auth_service import get_current_user
-from api.schema.token_schema import Token
-from api.service import auth_service
+from app.schema import user_schema
+from app.service import user_service
+from app.utils.db import get_db
+from app.schema.user_schema import User
+from app.service.auth_service import get_current_user
+from app.schema.token_schema import Token
+from app.service import auth_service
 
 from fastapi import Query
 from fastapi import Path

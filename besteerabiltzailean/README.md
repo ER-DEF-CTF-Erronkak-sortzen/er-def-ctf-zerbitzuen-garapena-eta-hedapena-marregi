@@ -50,13 +50,14 @@ If any of the above points are not met, SLA points will be deducted.
     'ssh root@10.0.0.104'
     docker exec -it besteerabiltzailean /bin/bash
     change the file /app/app/service/user_service.py
-        def check_user_is_current_user(username: str, current_user: user_schema.User):
-          return True
+
+        `def check_user_is_current_user(username: str, current_user: user_schema.User):
+          return True`
 
         to
 
-        def check_user_is_current_user(username: str, current_user: user_schema.User):
-          return username == current_user.email or username == current_user.username 
+        `def check_user_is_current_user(username: str, current_user: user_schema.User):
+          return username == current_user.email or username == current_user.username`
     
      
 

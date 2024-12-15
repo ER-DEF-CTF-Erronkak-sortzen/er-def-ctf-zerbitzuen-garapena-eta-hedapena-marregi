@@ -21,8 +21,8 @@ services:
       - db
   db:
     image: postgres:16-alpine
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data/
     expose:
       - 5432
     environment:
@@ -37,5 +37,5 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
       - SECRET_KEY=f269c7bbce9dae5f655d655777873e6dd78d5074c3271adeef8dbcb1ce57230b
 
-volumes:
-  postgres_data:
+# volumes:
+#   postgres_data:

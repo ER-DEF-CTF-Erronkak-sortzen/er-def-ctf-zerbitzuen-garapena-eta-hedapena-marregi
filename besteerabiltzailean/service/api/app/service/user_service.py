@@ -8,8 +8,7 @@ from app.service.auth_service import get_password_hash
 def get_user(username: str, current_user: user_schema.User):
 
     def check_user_is_current_user(username: str, current_user: user_schema.User):
-        # TODO change to True
-        # return username == current_user.email or username == current_user.username
+        # TODO check current user and username are the same
         return True
     
     user = UserModel.filter((UserModel.email == username) | (UserModel.username == username)).first()

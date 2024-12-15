@@ -6,8 +6,24 @@ import http.client
 import socket
 import paramiko
 import hashlib
-PORT_WEB = 9797
-PORT_SSH = 8822
+import requests
+
+
+
+FILE_CHECKSUM_PATHS = {
+"./main.py" : "82340b16c7062bd8e496921ef8c687ec",
+"./app/model/user_model.py" : "46c962705e39dd1c6a4916884e04cc79",
+"./app/schema/user_schema.py" : "af696b3d3ad148d633aa575514efdeac",
+"./app/schema/token_schema.py" : "de9354500504ca87959bb73d20a64a0b",
+"./app/scripts/create_tables.py" : "bffbb327464cfd0077387ab11208b79d",
+"./app/router/health_router.py" : "38bb8f10bc34eb68aaf67c4fc9c88fa6",
+"./app/router/user_router.py" : "8c5a120bd4226b46b8c867df4f92d0e0",
+"./app/utils/db.py" : "d39f29e7c67f70ce910fbcbf0bd0dffc",
+"./app/utils/settings.py" : "a4161d7b7c08a2fdb70113c03c911cdd",
+"./app/service/auth_service.py" : "9e6fa74d58610d57281c382c525a14f1",
+#"./app/service/user_service.py" : "e8fdc8847028446e0519c8d4b1cb3883",
+}
+PORT_API = 8008
 def ssh_connect():
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -31,7 +47,7 @@ class MyChecker(checkerlib.BaseChecker):
 
     def __init__(self, ip, team):
         checkerlib.BaseChecker.__init__(self, ip, team)
-        self._baseurl = f'http://[{self.ip}]:{PORT_WEB}'
+        self._baseurl = f'http://[{self.ip}]:{PORT_API}'
         logging.info(f"URL: {self._baseurl}")
 
     @ssh_connect()
@@ -47,23 +63,14 @@ class MyChecker(checkerlib.BaseChecker):
 
     def check_service(self):
         # check if ports are open
-        if not self._check_port_web(self.ip, PORT_WEB) or not self._check_port_ssh(self.ip, PORT_SSH):
+        if not self._check_port_api(self.ip, PORT_API):
             return checkerlib.CheckResult.DOWN
-        #else
-        # check if server is Apache 2.4.50
-        if not self._check_apache_version():
+        if not self._get_api_normal_response(self.ip, PORT_API):
+            return checkerlib.CheckResult.FAULTY 
+        # check if files from besterabiltzailean has been changed by comparing its hash with the hash of the original file
+        if not self._check_api_integrity(FILE_CHECKSUM_PATHS):
             return checkerlib.CheckResult.FAULTY
-        # check if dev1 user exists in pasapasa_ssh docker
-        if not self._check_ssh_user('dev1'):
-            return checkerlib.CheckResult.FAULTY
-        file_path_web = '/usr/local/apache2/htdocs/index.html'
-        # check if index.hmtl from pasapasa_web has been changed by comparing its hash with the hash of the original file
-        if not self._check_web_integrity(file_path_web):
-            return checkerlib.CheckResult.FAULTY            
-        file_path_ssh = '/etc/ssh/sshd_config'
-        # check if /etc/sshd_config from pasapasa_ssh has been changed by comparing its hash with the hash of the original file
-        if not self._check_ssh_integrity(file_path_ssh):
-            return checkerlib.CheckResult.FAULTY            
+                  
         return checkerlib.CheckResult.OK
     
     def check_flag(self, tick):
@@ -79,43 +86,16 @@ class MyChecker(checkerlib.BaseChecker):
             return checkerlib.CheckResult.FLAG_NOT_FOUND
         return checkerlib.CheckResult.OK
         
-    @ssh_connect()
-    #Function to check if an user exists
-    def _check_ssh_user(self, username):
-        ssh_session = self.client
-        command = f"docker exec pasapasa_ssh_1 sh -c 'id {username}'"
-        stdin, stdout, stderr = ssh_session.exec_command(command)
-        if stderr.channel.recv_exit_status() != 0:
-            return False
-        return True
-      
-    @ssh_connect()
-    def _check_web_integrity(self, path):
-        ssh_session = self.client
-        command = f"docker exec pasapasa_web_1 sh -c 'cat {path}'"
-        stdin, stdout, stderr = ssh_session.exec_command(command)
-        if stderr.channel.recv_exit_status() != 0:
-            return False
-        
-        output = stdout.read().decode().strip()
-        return hashlib.md5(output.encode()).hexdigest() == 'a4ed71eb4f7c89ff868088a62fe33036'
-    
-    @ssh_connect()
-    def _check_ssh_integrity(self, path):
-        ssh_session = self.client
-        command = f"docker exec pasapasa_ssh_1 sh -c 'cat {path}'"
-        stdin, stdout, stderr = ssh_session.exec_command(command)
-        if stderr.channel.recv_exit_status() != 0:
-            return False
-        output = stdout.read().decode().strip()
-        print (hashlib.md5(output.encode()).hexdigest())
 
-        return hashlib.md5(output.encode()).hexdigest() == 'ba55c65e08e320f1225c76f810f1328b'
+    
+
   
     # Private Funcs - Return False if error
+  
     def _add_new_flag(self, ssh_session, flag):
         # Execute the file creation command in the container
-        command = f"docker exec pasapasa_ssh_1 sh -c 'echo {flag} >> /tmp/flag.txt'"
+        db_command = f"psql -qtXA postgres://ctf:ctf@localhost/ctf -c \\\"UPDATE public.user SET flag=concat(flag,'{flag}') WHERE username='admin';\\\""
+        command = f"docker exec besteerabiltzailean_db_1 sh -c \"{db_command}\""
         stdin, stdout, stderr = ssh_session.exec_command(command)
 
         # Check if the command executed successfully
@@ -128,18 +108,18 @@ class MyChecker(checkerlib.BaseChecker):
     @ssh_connect()
     def _check_flag_present(self, flag):
         ssh_session = self.client
-        command = f"docker exec pasapasa_ssh_1 sh -c 'grep {flag} /tmp/flag.txt'"
+        db_command = f"psql -qtAX postgres://ctf:ctf@localhost/ctf -c \\\"SELECT flag FROM public.user WHERE username='admin'\\\""
+        command = f"docker exec besteerabiltzailean_db_1 sh -c \"{db_command}\""
         stdin, stdout, stderr = ssh_session.exec_command(command)
         if stderr.channel.recv_exit_status() != 0:
             return False
-
         output = stdout.read().decode().strip()
-        return flag == output
+        return flag in output
 
-    def _check_port_web(self, ip, port):
+    def _check_port_api(self, ip, port):
         try:
             conn = http.client.HTTPConnection(ip, port, timeout=5)
-            conn.request("GET", "/")
+            conn.request("GET", "/api/v1/health")
             response = conn.getresponse()
             return response.status == 200
         except (http.client.HTTPException, socket.error) as e:
@@ -148,33 +128,32 @@ class MyChecker(checkerlib.BaseChecker):
         finally:
             if conn:
                 conn.close()
-
-    def _check_port_ssh(self, ip, port):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            result = sock.connect_ex((ip, port))
-            return result == 0
-        except socket.error as e:
-            print(f"Exception: {e}")
+    
+    def _get_api_normal_response(self, ip, port):
+        url = f"http://{ip}:{port}/api/v1"
+        res = requests.post(f'{url}/login', data={'username': 'user', 'password': 'pasahitz_sekretua'})
+        if res.status_code != 200:
             return False
-        finally:
-            sock.close()
-
-    @ssh_connect()
-    def _check_apache_version(self):
+        headers={'Authorization': f'Bearer {res.json()["access_token"]}'}
+        user = requests.get(f'{url}/user/user', headers=headers)
+        if user.status_code != 200:
+            return False
+        user_json = user.json()
+        return user_json.get('username') == 'user'
+    
+    @ssh_connect()  
+    def _check_api_integrity(self, paths):
         ssh_session = self.client
-        command = f"docker exec pasapasa_web_1 sh -c 'httpd -v | grep \"Apache/2.4.50\"'"
-        stdin, stdout, stderr = ssh_session.exec_command(command)
+        for path, file_sum in paths.items():
+            command = f"docker exec besteerabiltzailean_web_1 sh -c 'cat {path}'"
+            stdin, stdout, stderr = ssh_session.exec_command(command)
+            if stderr.channel.recv_exit_status() != 0:
+                return False
+            output = stdout.read().decode()
+            if hashlib.md5(output.encode()).hexdigest() != file_sum:
+                return False
+        return True
 
-        if stdout:
-            return True
-        else:
-            return False
   
 if __name__ == '__main__':
     checkerlib.run_check(MyChecker)
-
-
-
-
